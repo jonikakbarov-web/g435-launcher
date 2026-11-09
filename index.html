@@ -461,40 +461,54 @@ async function readStdBattery(d,loc){
 
 /* ---- read every USB / receiver device the browser may use ---- */
 const G435_DONGLE=0x0ACB;
+// what kind of device is it: read the HID usages it declares (mouse 1:2, keyboard 1:6, gamepad 1:4/1:5, headset = telephony 0x0B)
+function kindFromHid(group){
+  const name=group.map(d=>d.productName||'').join(' ');
+  const byName=guessKind(name);if(byName!=='device')return byName;
+  const u=new Set();for(const d of group)for(const c of d.collections||[])u.add(c.usagePage+':'+c.usage);
+  if(u.has('1:2'))return'mouse';
+  if(u.has('1:6')||u.has('1:7'))return'keyboard';
+  if(u.has('1:5')||u.has('1:4'))return'gamepad';
+  if(u.has('11:1')||u.has('11:5'))return'headset';
+  if(u.has('13:5')||u.has('13:4'))return'trackpad';
+  if(u.has('12:1'))return/head|audio|sound|speaker/i.test(name)?'headset':'device';
+  return'device';
+}
 async function scanHid(){
   const out=[];if(!('hid' in navigator)||IS_MOBILE)return out;
   let list=[];try{list=await navigator.hid.getDevices()}catch(e){return out}
-  const done=new Set();
-  // Logitech HID++ first: one receiver can carry up to six devices
-  for(const d of list){
-    const key=d.vendorId+':'+d.productId;
-    if(done.has(key))continue;
-    if(d.vendorId===0x046d&&d.productId===G435_DONGLE){done.add(key);
-      out.push({key:'g435dongle',name:'G435 · USB-приёмник',kind:'headset',conn:'usb',pct:null,note:'приёмник передаёт только звук',method:'046D:0ACB, без заряда'});continue}
-    if(d.vendorId!==0x046d||!hasLong(d))continue;
-    if(!(await openDev(d)))continue;
-    let any=false;
-    for(const idx of[0xFF,1,2,3,4,5,6]){
-      try{const r=await hidppProbe(d,idx);any=true;
-        const name=r.name||(d.productName||'Logitech')+(idx===0xFF?'':' #'+idx);
-        out.push({key:`hidpp:${key}:${idx}`,name,kind:r.kind==='device'?guessKind(name):r.kind,conn:idx===0xFF?'cable':'usb',
-          pct:r.bat?r.bat.pct:null,chg:r.bat&&r.bat.chg,full:r.bat&&r.bat.full,approx:r.bat&&r.bat.approx,method:r.method||'HID++ без заряда',
-          via:idx===0xFF?(d.productName||'USB'):(d.productName||'приёмник')});
-      }catch(e){}
+  // one physical device shows up as several HID entries: group them
+  const groups=new Map();
+  for(const d of list){const k=d.vendorId+':'+d.productId;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(d)}
+  for(const[key,group]of groups){
+    const d0=group[0],name0=group.map(d=>d.productName).find(Boolean)||('USB '+hex(d0.vendorId)+':'+hex(d0.productId));
+    const kind0=kindFromHid(group);
+    if(d0.vendorId===0x046d&&d0.productId===G435_DONGLE){
+      out.push({key:'g435dongle:'+key,name:'G435',kind:'headset',conn:'usb',pct:null,note:'приёмник заряд не передаёт',method:'046D:0ACB, без заряда'});continue}
+    let found=false;
+    // Logitech receivers and devices: ask every slot over HID++
+    const hp=d0.vendorId===0x046d?group.find(hasLong):null;
+    if(hp&&await openDev(hp)){
+      for(const idx of[0xFF,1,2,3,4,5,6]){
+        try{const r=await hidppProbe(hp,idx);found=true;
+          const name=r.name||name0+(idx===0xFF?'':' #'+idx);
+          const kind=r.kind==='device'||r.kind==='receiver'?guessKind(name):r.kind;
+          out.push({key:`hidpp:${key}:${idx}`,name,kind:kind==='device'&&idx===0xFF?kind0:kind,conn:idx===0xFF?'cable':'usb',
+            pct:r.bat?r.bat.pct:null,chg:r.bat&&r.bat.chg,full:r.bat&&r.bat.full,approx:r.bat&&r.bat.approx,
+            method:r.method||'HID++, заряд не сообщает',note:r.bat?'':'без данных о заряде',via:idx===0xFF?'':name0});
+        }catch(e){}
+      }
     }
-    if(any)done.add(key);
-  }
-  // then any device that reports battery the standard HID way
-  for(const d of list){
-    const key=d.vendorId+':'+d.productId;if(done.has(key))continue;
-    const loc=findStdBattery(d);
-    if(!loc){ // a Logitech headset on its USB-C cable with no battery report still means: charging
-      if(d.vendorId===0x046d&&d.productId!==G435_DONGLE&&/g435|headset/i.test(d.productName||'')){done.add(key);
-        out.push({key:'cable:'+key,name:d.productName||'Наушники',kind:'headset',conn:'cable',pct:null,chg:true,method:'USB '+hex(d.vendorId)+':'+hex(d.productId)+' · без процента',note:'на зарядке'})}
-      continue}
-    if(!(await openDev(d)))continue;
-    try{const r=await readStdBattery(d,loc);done.add(key);
-      out.push({key:'std:'+key,name:d.productName||('USB '+hex(d.vendorId)+':'+hex(d.productId)),kind:guessKind(d.productName),conn:'usb',pct:r.pct,method:'HID Battery Strength'})}catch(e){}
+    if(found)continue;
+    // standard HID battery report
+    let std=null;
+    for(const d of group){const loc=findStdBattery(d);if(!loc)continue;if(!(await openDev(d)))continue;
+      try{std=await readStdBattery(d,loc);break}catch(e){}}
+    const cableHeadset=d0.vendorId===0x046d&&kind0==='headset'&&!std;
+    out.push({key:'usb:'+key,name:name0,kind:kind0,conn:cableHeadset?'cable':'usb',
+      pct:std?std.pct:null,chg:cableHeadset||undefined,
+      method:std?'HID Battery Strength':cableHeadset?'USB '+hex(d0.vendorId)+':'+hex(d0.productId)+' · без процента':'заряд не сообщает',
+      note:std?'':cableHeadset?'на зарядке':'без данных о заряде'});
   }
   return out;
 }
@@ -530,7 +544,7 @@ const ICON={
   gamepad:'<path d="M7 8h10a4 4 0 0 1 4 4l1 4a2.5 2.5 0 0 1-4.4 1.8L16 16H8l-1.6 1.8A2.5 2.5 0 0 1 2 16l1-4a4 4 0 0 1 4-4zM8 11v3M6.5 12.5h3M16 12h.01M18 13.5h.01"/>',
   device:'<rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M10 18h4"/>'};
 ICON.trackball=ICON.mouse;ICON.presenter=ICON.device;ICON.remote=ICON.device;ICON.webcam=ICON.device;ICON.wheel=ICON.gamepad;ICON.receiver=ICON.device;
-const CONN_SHORT={usb:'приёмник',cable:'USB-кабель',bt:'Bluetooth'};
+const CONN_SHORT={usb:'USB',cable:'USB-кабель',bt:'Bluetooth'};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function renderList(){
   const box=$('devs');
@@ -578,6 +592,7 @@ function showSelected(clicked){
     if(d.offline){$('stateTxt').textContent='последнее значение';$('state').className='state'}}
   else if(d.chg)setChargingUnknown();else setNoData(d.offline?'не подключено':'нет данных');
   $('dSrc').textContent=d.demo?'демо-значение':(d.method||'—');
+  if(clicked&&!d.demo&&d.pct==null&&!d.chg)note(`<b>${esc(d.name)}</b> подключено, но браузеру свой заряд не сообщает. Если у него есть Bluetooth, подключи по Bluetooth и запусти помощник ниже: заряд возьмётся из системы.`);
   $('dProto').textContent=d.method||'—';
   setConn(d.demo?'demo':d.conn,d.via||'');
   $('dTime').textContent=nowTxt();
@@ -610,17 +625,20 @@ async function refreshAll(auto){
     list.sort((a,b)=>(a.offline-b.offline)||((a.pct==null)-(b.pct==null))||((a.pct||0)-(b.pct||0)));
     devices=list;
     const newCharging=list.find(d=>d.chg&&!(prev.get(d.key)||{}).chg);
-    if(newCharging)selKey=newCharging.key;
+    const picked=lastPicked&&list.find(d=>d.key.includes(':'+lastPicked)||d.key.endsWith(lastPicked));lastPicked=null;
+    if(picked)selKey=picked.key;
+    else if(newCharging)selKey=newCharging.key;
     else if(!list.some(d=>d.key===selKey))selKey=(list.find(d=>/g435/i.test(d.name)&&!d.offline)||list.find(d=>!d.offline)||list[0]).key;
-    showSelected();
+    showSelected(!!(picked&&picked.pct==null&&!picked.chg));
     const withPct=list.filter(d=>d.pct!=null&&!d.offline).length;
-    note(`Найдено устройств: <b>${list.length}</b>${withPct?`, с зарядом: ${withPct}`:''}. Нажми на устройство, чтобы показать его крупно. «Показать заряд» обновляет все сразу.`);
+    if(!(picked&&picked.pct==null&&!picked.chg))note(`Найдено устройств: <b>${list.length}</b>${withPct?`, с зарядом: ${withPct}`:''}. Нажми на устройство, чтобы показать его крупно. «Показать заряд» обновляет все сразу.`);
     showHowto(!helperLive&&!list.some(d=>d.conn==='bt'));
   }finally{busy=false;btn.disabled=false;btn.textContent='Показать заряд'}
 }
+let lastPicked=null;
 async function addDevice(){
   if(!('hid' in navigator)){note('Этот браузер не умеет работать с USB-устройствами. Открой лаунчер в <b>Chrome или Edge</b> на компьютере.',true);return}
-  try{await navigator.hid.requestDevice({filters:[]})}
+  try{const got=await navigator.hid.requestDevice({filters:[]});if(got&&got.length)lastPicked=got[0].vendorId+':'+got[0].productId;else return}
   catch(e){note('Здесь браузер не даёт доступ к USB. Открой лаунчер по ссылке jonikakbarov-web.github.io/g435-launcher в Chrome или Edge.',true);return}
   refreshAll(false);
 }
