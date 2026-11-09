@@ -1,0 +1,112 @@
+# G435 Helper for Windows: reads the Bluetooth battery level that Windows already knows
+# and serves it to the G435 Launcher page at http://localhost:7435/battery
+$ErrorActionPreference = 'SilentlyContinue'
+$BatteryKey = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
+$script:cache = $null; $script:cachedAt = [datetime]::MinValue
+
+function Get-G435 {
+  if ($script:cache -and ((Get-Date) - $script:cachedAt).TotalSeconds -lt 10) { return $script:cache }
+  $res = [ordered]@{ ok = $true; found = $false; connected = $false; percent = $null; source = 'Windows Bluetooth' }
+  $devs = @(Get-PnpDevice -FriendlyName '*G435*')
+  foreach ($d in $devs) {
+    $p = Get-PnpDeviceProperty -InstanceId $d.InstanceId -KeyName $BatteryKey
+    $res.found = $true
+    if (-not $res.name) { $res.name = $d.FriendlyName }
+    if ($d.Status -eq 'OK') { $res.connected = $true }
+    if ($p -and $null -ne $p.Data) { $res.percent = [int]$p.Data; $res.name = $d.FriendlyName; if ($d.Status -eq 'OK') { $res.connected = $true } }
+  }
+  $script:cache = $res; $script:cachedAt = Get-Date
+  return $res
+}
+
+# Every Bluetooth device with a battery that Windows knows about
+$script:devs = $null; $script:devsAt = [datetime]::MinValue
+function Get-Kind($n) {
+  $n = "$n".ToLower()
+  if ($n -match 'mouse|mx master|mx anywhere') { return 'mouse' }
+  if ($n -match 'keyboard|keys') { return 'keyboard' }
+  if ($n -match 'controller|xbox|dualsense|gamepad') { return 'gamepad' }
+  if ($n -match 'head|buds|airpods|g435|ear|beats|jbl|sony wh|sony wf') { return 'headset' }
+  return 'device'
+}
+function Get-Devices {
+  if ($script:devs -and ((Get-Date) - $script:devsAt).TotalSeconds -lt 5) { return $script:devs }
+  $list = New-Object System.Collections.ArrayList
+  $seen = @{}
+  foreach ($d in @(Get-PnpDevice -Class Bluetooth -PresentOnly)) {
+    $p = Get-PnpDeviceProperty -InstanceId $d.InstanceId -KeyName $BatteryKey
+    if (-not $p -or $null -eq $p.Data) { continue }
+    $name = $d.FriendlyName
+    if ($seen.ContainsKey($name)) { continue }; $seen[$name] = 1
+    [void]$list.Add([ordered]@{ name = $name; percent = [int]$p.Data; connected = ($d.Status -eq 'OK'); kind = (Get-Kind $name); source = 'Windows Bluetooth' })
+  }
+  $script:devs = [ordered]@{ ok = $true; platform = 'win'; devices = @($list) }
+  $script:devsAt = Get-Date
+  return $script:devs
+}
+
+# Latest official firmware, read from Logitech's own support page (cached for 6 hours)
+$FwPage = 'https://support.logi.com/hc/en-ca/articles/33655346235543-Logitech-G435-LIGHTSPEED-Wireless-Gaming-Headset-Update-Tool'
+$AllowedOrigins = @('https://jonikakbarov-web.github.io', 'null')
+$script:fw = $null; $script:fwAt = [datetime]::MinValue
+function Get-Firmware {
+  if ($script:fw -and ((Get-Date) - $script:fwAt).TotalHours -lt 6) { return $script:fw }
+  $r = [ordered]@{ ok = $true; platform = 'win'; canInstall = $true; page = $FwPage }
+  try {
+    $html = (Invoke-WebRequest -Uri $FwPage -UseBasicParsing -TimeoutSec 20 -UserAgent 'Mozilla/5.0 (Windows NT 10.0)').Content
+    $m = [regex]::Match($html, '(https://download01\.logi\.com/[^"''\s<>()]*?G435Update_(\d+(?:\.\d+){2,3})\.exe)', 'IgnoreCase')
+    if ($m.Success) { $r.url = $m.Groups[1].Value; $r.latest = $m.Groups[2].Value }
+    $d = [regex]::Match($html, 'Last Update:?\s*(?:<[^>]*>\s*)*(\d{4}-\d{2}-\d{2})', 'IgnoreCase')
+    if ($d.Success) { $r.date = $d.Groups[1].Value }
+  } catch {}
+  if ($r.latest) { $script:fw = $r; $script:fwAt = Get-Date }
+  return $r
+}
+# Download the official updater from logi.com, check that Logitech signed it, then open it
+function Start-Update {
+  $f = Get-Firmware
+  if (-not $f.url -or $f.url -notmatch '^https://download01\.logi\.com/') { return [ordered]@{ ok = $false; error = 'no-official-url' } }
+  $file = Join-Path $env:TEMP ("G435Update_{0}.exe" -f $f.latest)
+  try { Invoke-WebRequest -Uri $f.url -OutFile $file -UseBasicParsing -TimeoutSec 300 } catch { return [ordered]@{ ok = $false; error = 'download-failed' } }
+  $sig = Get-AuthenticodeSignature -FilePath $file
+  if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Logitech') {
+    Remove-Item $file -Force
+    return [ordered]@{ ok = $false; error = 'bad-signature' }
+  }
+  Start-Process -FilePath $file
+  Write-Host ("  Opened the official Logitech updater {0}" -f $f.latest)
+  return [ordered]@{ ok = $true; started = $true; version = $f.latest }
+}
+
+$listener = New-Object System.Net.HttpListener
+$listener.Prefixes.Add('http://localhost:7435/')
+try { $listener.Start() } catch { Write-Host "`n  Port 7435 is busy: the helper is probably already running.`n"; return }
+
+Write-Host "`n  G435 Helper is running. Keep this window open while you use the launcher."
+Write-Host "  Stop: Ctrl+C`n"
+$b = Get-G435
+if (-not $b.found) { Write-Host '  G435 not found in Bluetooth yet. Pair the headset over Bluetooth.' }
+elseif ($null -ne $b.percent) { Write-Host ("  {0}: {1}%" -f $b.name, $b.percent) }
+else { Write-Host '  G435 found, but Windows does not report its battery yet.' }
+
+while ($listener.IsListening) {
+  $ctx = $listener.GetContext(); $r = $ctx.Response
+  $r.Headers.Add('Access-Control-Allow-Origin', '*')
+  $r.Headers.Add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  $r.Headers.Add('Access-Control-Allow-Headers', '*')
+  $r.Headers.Add('Access-Control-Allow-Private-Network', 'true')
+  $r.Headers.Add('Cache-Control', 'no-store')
+  if ($ctx.Request.HttpMethod -eq 'OPTIONS') { $r.StatusCode = 204; $r.Close(); continue }
+  $path = $ctx.Request.Url.AbsolutePath
+  if ($path -eq '/update') {
+    $origin = $ctx.Request.Headers['Origin']
+    if ($ctx.Request.HttpMethod -ne 'POST' -or ($AllowedOrigins -notcontains $origin)) { $data = [ordered]@{ ok = $false; error = 'forbidden' }; $r.StatusCode = 403 }
+    else { $data = Start-Update }
+  }
+  elseif ($path -eq '/firmware') { $data = Get-Firmware }
+  elseif ($path -eq '/devices') { $data = Get-Devices }
+  else { $data = Get-G435 }
+  $bytes = [Text.Encoding]::UTF8.GetBytes(($data | ConvertTo-Json -Compress -Depth 5))
+  $r.ContentType = 'application/json; charset=utf-8'
+  $r.OutputStream.Write($bytes, 0, $bytes.Length); $r.Close()
+}
