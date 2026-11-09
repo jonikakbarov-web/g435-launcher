@@ -109,6 +109,41 @@ button.b.ghost{border-style:dashed;color:var(--muted);font-weight:500}
   .app{grid-template-columns:1fr;height:auto}
   .stage{height:66vh;min-height:420px}
 }
+.howto{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--ground)}
+.howto ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.5}
+.howto li::marker{font-family:var(--f-mono);color:var(--muted)}
+.cmd{display:flex;gap:6px;align-items:stretch;margin-top:6px}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:12px/1.4 var(--f-mono);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.cmd button{font:600 12px var(--f-body);border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 10px;cursor:pointer;white-space:nowrap}
+.cmd button:focus-visible{outline:2px solid var(--accent)}
+.is-mobile .howto{display:none}
+.is-mobile dl{grid-template-columns:1fr;gap:2px}.is-mobile dd{text-align:left;margin-bottom:6px;overflow-wrap:normal}
+.fw{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:16px}
+.fw-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.fw-status{font-weight:700;font-size:15px;margin-top:4px;display:flex;align-items:center;gap:8px}
+.fw-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--bad);color:#fff;font:700 11px var(--f-mono)}
+.fw-ok{color:var(--ok)}
+button.b.small{padding:8px 12px;font-size:13px}
+.fw dl{font-size:12px}
+.sheet-bg{position:fixed;inset:0;z-index:30;background:rgba(20,24,44,.38);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));animation:ovIn .25s ease-out}
+.sheet{width:min(400px,100%);max-height:calc(100% - 32px);overflow:auto;background:var(--panel);border-radius:22px;box-shadow:0 24px 60px rgba(20,24,44,.35);padding:22px;display:flex;flex-direction:column;gap:14px;animation:pop .45s cubic-bezier(.2,1.3,.4,1)}
+.sheet-top{display:flex;gap:14px;align-items:center}
+.sheet-ic{width:58px;height:58px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#8fa6ea,#6c8ddf);box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.sheet-ic svg{width:34px;height:34px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sheet h2{margin:0;font:700 18px var(--f-display)}
+.sheet .meta{font-size:13px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
+.sheet p{margin:0;font-size:14px;line-height:1.5}
+.sheet .steps{display:flex;flex-direction:column;gap:8px;font-size:13px}
+.step{display:flex;gap:10px;align-items:flex-start;color:var(--muted)}
+.step i{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid var(--line);margin-top:1px}
+.step.run{color:var(--ink)}.step.run i{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.step.done{color:var(--ink)}.step.done i{background:var(--ok);border-color:var(--ok)}
+.step.fail{color:var(--bad)}.step.fail i{background:var(--bad);border-color:var(--bad)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sheet .row{display:flex;flex-direction:column;gap:8px}
+.sheet a{color:var(--accent)}
+.is-mobile .fw{grid-column:1/-1}
 .only-mob{display:none}
 .is-mobile .only-mob{display:inline}.is-mobile .only-desk{display:none}
 .is-mobile body{height:auto;font-size:15px;padding-block:10px}
@@ -131,6 +166,16 @@ button.b.ghost{border-style:dashed;color:var(--muted);font-weight:500}
 </style>
 
 <canvas class="trail" id="trail" aria-hidden="true"></canvas>
+<div class="sheet-bg" id="sheetBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-top">
+      <div class="sheet-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4.5" height="7" rx="2"/><rect x="16.5" y="14" width="4.5" height="7" rx="2"/></svg></div>
+      <div><h2 id="sheetTitle">Обновление ПО</h2><div class="meta" id="sheetMeta">—</div></div>
+    </div>
+    <div id="sheetBody"></div>
+    <div class="row" id="sheetBtns"></div>
+  </div>
+</div>
 <div class="app">
   <section class="stage" id="stage" tabindex="0" aria-label="3D-модель наушников. Тяни мышкой, чтобы вращать, колесо меняет приближение, стрелки тоже вращают">
     <canvas id="gl"></canvas>
@@ -194,19 +239,38 @@ button.b.ghost{border-style:dashed;color:var(--muted);font-weight:500}
     </div>
     <div class="mob-side">
     <div class="btns">
-      <button class="b primary" id="btnConnect">Подключить наушники</button>
-      <button class="b" id="btnRefresh" disabled>Обновить заряд</button>
-      <button class="b" id="btnConn">Определить подключение</button>
+      <button class="b primary" id="btnConnect">Показать заряд</button>
       <button class="b ghost" id="btnDemoChg">Показать зарядку (демо)</button>
     </div>
     <dl>
       <dt>Источник</dt><dd id="dSrc">демо-значение</dd>
       <dt>Подключение</dt><dd id="dLink">—</dd>
       <dt class="dl-desk">Метод</dt><dd class="dl-desk" id="dProto">—</dd>
+      <dt class="dl-desk">Помощник</dt><dd class="dl-desk" id="dHelper">не запущен</dd>
       <dt>Обновлено</dt><dd id="dTime">—</dd>
     </dl>
     </div>
-    <div class="note" id="note">Сейчас показан <b>пример заряда</b>. Вставь USB-приёмник G435, включи наушники и нажми «Подключить». Нужен Chrome или Edge на компьютере.</div>
+    <div class="note" id="note">Сейчас показан <b>пример заряда</b>. Нажми «Показать заряд». Поставь наушники на зарядку кабелем, и лаунчер покажет это сразу. Нужен Chrome или Edge на компьютере.</div>
+    <div class="fw" id="fwCard">
+      <div class="fw-head">
+        <div><div class="label">Прошивка</div><div class="fw-status" id="fwStatus">Проверяю…</div></div>
+        <button class="b small" id="btnFw">Подробнее</button>
+      </div>
+      <dl>
+        <dt>Установлена</dt><dd id="fwInst">неизвестна</dd>
+        <dt>Последняя у Logitech</dt><dd id="fwLatest">—</dd>
+        <dt>Проверено</dt><dd id="fwSrc">—</dd>
+      </dl>
+    </div>
+    <div class="howto" id="howto" hidden>
+      <div class="label">Как видеть заряд</div>
+      <ol>
+        <li>Подключи G435 к компьютеру <b>по Bluetooth</b>. Через USB-приёмник наушники заряд не передают никому.</li>
+        <li>Запусти помощник: открой <b id="termName">Терминал</b>, вставь команду и нажми Enter.
+          <div class="cmd"><code id="cmd">—</code><button id="btnCopy">Копировать</button></div></li>
+        <li>Не закрывай окно помощника. Лаунчер сам подхватит заряд за несколько секунд. Если браузер спросит про доступ к устройствам в локальной сети, разреши.</li>
+      </ol>
+    </div>
   </aside>
 </div>
 
@@ -262,9 +326,10 @@ let ovTimer=null;
 function chargeOverlay(p,txt){
   const ov=$('chgOv');ov.hidden=false;ov.classList.remove('out');
   $('ovTxt').textContent=txt||'Заряжается';$('ovArc').style.strokeDashoffset=326.7;
-  let n=0;const target=Math.round(p),t0=performance.now();
+  const known=p!=null;let n=0;const target=known?Math.round(p):100,t0=performance.now();
   requestAnimationFrame(()=>requestAnimationFrame(()=>$('ovArc').style.strokeDashoffset=326.7*(1-target/100)));
-  (function count(now){const k=Math.min(1,(now-t0)/1400);n=Math.round(target*(1-Math.pow(1-k,3)));$('ovPct').textContent=n+'%';if(k<1)requestAnimationFrame(count)})(t0);
+  if(!known)$('ovPct').textContent='⚡';
+  else (function count(now){const k=Math.min(1,(now-t0)/1400);n=Math.round(target*(1-Math.pow(1-k,3)));$('ovPct').textContent=n+'%';if(k<1)requestAnimationFrame(count)})(t0);
   clearTimeout(ovTimer);ovTimer=setTimeout(()=>{ov.classList.add('out');setTimeout(()=>{ov.hidden=true},600)},3400);
 }
 function setGauge(p,{chg=false,src,mode,full=false}={}){
@@ -321,62 +386,220 @@ async function detect(){
   }
   return false;
 }
-function setPoll(fast){clearInterval(poll);poll=setInterval(readBattery,fast?5000:30000)}
-async function readBattery(){
-  if(!method)return;
+async function readBattery(){ // one HID++ read; null when the device doesn't answer
+  if(!method)return null;
   try{
     let pct,chg=false,full=false,extra='';
     if(method.kind==='1004'){const r=await req(method.i,1);pct=r[0];chg=r[2]===1||r[2]===2||r[2]===3;full=r[2]===3}
     else if(method.kind==='1000'){const r=await req(method.i,0);pct=r[0];chg=r[2]>=1&&r[2]<=3;full=r[2]===3}
     else{const r=await req(method.i,0);const mv=(r[0]<<8)|r[1];pct=mvToPct(mv);chg=!!(r[2]&0x02);full=!!(r[2]&0x04);extra=' · '+mv+' мВ'}
-    const wasChg=charging;hidOk=true;
-    setGauge(pct,{chg,full,src:dev.productName||'Logitech',mode:'on'});
-    if(wasChg!==chg||!poll)setPoll(chg);
-    $('dProto').textContent=method.name+extra;
-    setConn(audio&&audio.found&&audio.bt?'bt':'usb',dev.productName);
-    note(chg?'Наушники <b>заряжаются</b>. Пока идёт зарядка, процент обновляется каждые 5 секунд.':method.kind==='1F20'?'Заряд посчитан по напряжению батареи, поэтому он <b>примерный</b>, ±5%. Обновляется раз в 30 секунд.':'Заряд читается прямо с наушников. Обновляется раз в 30 секунд.');
+    hidOk=true;return{pct,chg,full,extra};
+  }catch(e){hidOk=false;return null}
+}
+const DONGLE=0x0ACB;
+const isDongle=d=>d.productId===DONGLE;
+const hex=n=>n.toString(16).toUpperCase().padStart(4,'0');
+const nowTxt=()=>new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+let wired=null,busy=false;
+async function openDev(d){
+  try{if(!d.opened)await d.open()}catch(e){return false}
+  if(!d._g435){d.addEventListener('inputreport',onReport);d._g435=1}
+  return true;
+}
+function stopDemo(){if(demo){demo=false;demoChg=false;$('btnDemoChg').hidden=true}}
+function setNoData(txt){
+  charging=false;$('gauge').classList.remove('charging');$('ring').style.strokeDashoffset=326.7;
+  $('pct').innerHTML='—';$('chipPct').textContent='—';$('state').className='state';$('stateTxt').textContent=txt||'нет данных';
+  $('dTime').textContent=nowTxt();ledColor='#9aa0b4';
+}
+function setChargingUnknown(src){ // on the cable: we know it charges, but not the percent
+  const was=charging;charging=true;
+  $('ring').style.strokeDashoffset=0;$('ring').setAttribute('stroke','#25a465');
+  $('pct').innerHTML='⚡';$('chipPct').textContent='на зарядке ⚡';
+  $('gauge').classList.add('charging');$('lvl').style.transform='translateY(60px)';
+  $('state').className='state chg';$('stateTxt').textContent='на зарядке';
+  $('dSrc').textContent=src;$('dTime').textContent=nowTxt();ledColor='#25a465';
+  if(!was)chargeOverlay(null,'Наушники на зарядке');
+}
+async function helperOnce(){
+  if(IS_MOBILE)return null;
+  for(const u of helperUrl?[helperUrl]:HELPER){
+    try{const r=await fetch(u,{cache:'no-store',signal:AbortSignal.timeout(4000)});const j=await r.json();
+      helperUrl=u;helperLive=true;$('dHelper').textContent='работает';
+      if(j.firmware&&j.firmware!==btFw){btFw=j.firmware;renderFw()}
+      checkFirmware();return j}catch(e){}
+  }
+  helperUrl=null;helperLive=false;$('dHelper').textContent='не запущен';return null;
+}
+async function tryWired(d){ // the headset itself on its USB-C cable
+  wired=d;if(!(await openDev(d)))return{wired:true,pid:d.productId,name:d.productName};
+  dev=d;method=null;
+  try{if(await detect()){const r=await readBattery();if(r)return{...r,chg:true,src:'кабель USB-C',conn:'usb',detail:'кабель USB-C',proto:method.name+r.extra}}}catch(e){}
+  return{wired:true,pid:d.productId,name:d.productName};
+}
+async function showCharge(auto){
+  if(busy||IS_MOBILE)return;busy=true;const btn=$('btnConnect');btn.disabled=true;btn.textContent='Проверяю…';
+  try{
+    let res=null,sawDongle=false,j;
+    const hid='hid' in navigator;
+    let list=[];
+    if(hid){try{list=(await navigator.hid.getDevices()).filter(d=>d.vendorId===0x046d)}catch(e){}}
+    sawDongle=list.some(isDongle);
+    const head=list.find(d=>!isDongle(d));
+    if(head)res=await tryWired(head);
+    if(!res||res.wired){
+      j=await helperOnce();
+      if(j&&j.connected&&j.percent!=null){
+        const onCable=!!(res&&res.wired);
+        const chg=onCable||(btPrev!=null&&j.percent>btPrev);btPrev=j.percent;
+        res={pct:j.percent,chg,full:chg&&j.percent>=100,src:onCable?'Bluetooth + кабель':'Bluetooth',conn:'bt',detail:j.name,proto:'Bluetooth · помощник'};
+      }
+    }
+    if(!res&&hid&&!auto){ // let the person pick the headset (on cable) or the receiver
+      let picked=[];
+      try{picked=await navigator.hid.requestDevice({filters:[{vendorId:0x046d}]})}
+      catch(e){note('Здесь браузер не даёт доступ к USB. Открой лаунчер по ссылке jonikakbarov-web.github.io/g435-launcher в Chrome или Edge.',true);return}
+      sawDongle=sawDongle||picked.some(isDongle);
+      const h2=picked.find(d=>!isDongle(d));
+      if(h2)res=await tryWired(h2);
+    }
+    stopDemo();
+    if(res&&res.pct!=null){
+      setGauge(res.pct,{chg:res.chg,full:res.full,mode:'on',src:res.src});
+      setConn(res.conn,res.detail);$('dProto').textContent=res.proto||'—';showHowto(false);
+      note(res.chg?`Наушники <b>на зарядке</b>, сейчас ${Math.round(res.pct)}%.`:`Заряд наушников: <b>${Math.round(res.pct)}%</b>. Нажми «Показать заряд», чтобы обновить.`);
+    }else if(res&&res.wired){
+      setChargingUnknown('кабель USB-C');setConn('usb','кабель USB-C');
+      $('dProto').textContent='USB 046D:'+hex(res.pid||0)+' · без процента';
+      note('Наушники подключены кабелем и <b>заряжаются</b>. Процент по кабелю они не сообщают. Чтобы увидеть цифру, включи наушники по Bluetooth и запусти помощник ниже.');
+      if(!helperLive)showHowto(true);
+    }else if(sawDongle){
+      setNoData('нет данных');setConn('usb','приёмник');$('dProto').textContent='приёмник 046D:0ACB, без заряда';
+      note('Подключён только USB-приёмник, а он передаёт лишь звук. <b>Поставь наушники на зарядку кабелем</b> и нажми «Показать заряд», в списке выбери сами наушники. Процент можно увидеть по Bluetooth через помощник.');
+      showHowto(!helperLive);
+    }else if(j&&j.found&&!j.connected){
+      setNoData('не подключены');setConn('none',j.name);note('G435 есть в Bluetooth, но сейчас не подключены. Включи их или поставь на зарядку кабелем.',true);
+    }else if(j&&j.connected){
+      setNoData('нет процента');setConn('bt',j.name);note('Наушники подключены по Bluetooth, но система пока не получила от них процент. Попробуй через минуту.',true);
+    }else if(!auto){
+      setNoData('не найдены');setConn('none');
+      note('Наушники не найдены. Поставь их на зарядку кабелем USB-C и нажми «Показать заряд» ещё раз. Если в списке браузера их нет, значит по кабелю они только заряжаются и компьютеру себя не показывают. Тогда процент можно увидеть по Bluetooth через помощник.',true);
+      showHowto(true);
+    }
+  }finally{busy=false;btn.disabled=false;btn.textContent='Показать заряд'}
+}
+$('btnConnect').onclick=()=>showCharge(false);
+$('btnDemoChg').onclick=()=>{demoChg=!demoChg;$('btnDemoChg').textContent=demoChg?'Отключить зарядку (демо)':'Показать зарядку (демо)';setGauge(level,{chg:demoChg,mode:'demo'})};
+if('hid' in navigator&&!IS_MOBILE){
+  // put on charge -> the headset appears on USB -> show it right away (works after it was picked once)
+  navigator.hid.addEventListener('connect',e=>{if(e.device.vendorId===0x046d&&!isDongle(e.device))setTimeout(()=>showCharge(true),800)});
+  navigator.hid.addEventListener('disconnect',e=>{
+    if(wired&&e.device.productId===wired.productId){wired=null;if(dev===e.device){dev=null;method=null}
+      charging=false;$('gauge').classList.remove('charging');$('state').className='state';$('stateTxt').textContent='сняты с зарядки';$('chipPct').textContent=$('chipPct').textContent.replace(' ⚡','');
+      note('Наушники сняты с зарядки.')}
+  });
+}
+
+/* ---- Bluetooth battery through the local helper ---- */
+const BASE='https://jonikakbarov-web.github.io/g435-launcher/';
+const IS_WIN=/Win/i.test(navigator.platform||navigator.userAgent);
+$('cmd').textContent=IS_WIN?`irm ${BASE}helper-win.txt | iex`:`curl -fsSL ${BASE}helper-mac.pl | perl`;
+$('termName').textContent=IS_WIN?'PowerShell':'Терминал';
+$('btnCopy').onclick=async()=>{const t=$('cmd').textContent;try{await navigator.clipboard.writeText(t);$('btnCopy').textContent='Скопировано'}catch(e){const r=document.createRange();r.selectNodeContents($('cmd'));const s=getSelection();s.removeAllRanges();s.addRange(r);$('btnCopy').textContent='Выделено, нажми ⌘C'}setTimeout(()=>$('btnCopy').textContent='Копировать',2200)};
+function showHowto(v){$('howto').hidden=!v||IS_MOBILE}
+const HELPER=['http://127.0.0.1:7435/battery','http://localhost:7435/battery'];
+let helperLive=false,helperUrl=null,btPrev=null,btChg=false;
+async function pollHelper(){
+  let j=null;
+  for(const u of helperUrl?[helperUrl]:HELPER){
+    try{const r=await fetch(u,{cache:'no-store',signal:AbortSignal.timeout(4000)});j=await r.json();helperUrl=u;break}catch(e){}
+  }
+  if(!j){ if(helperLive){helperLive=false;$('dHelper').textContent='не запущен';if(!hidOk){setConn(dev?'usb':'none');note('Помощник остановлен. Запусти его снова, чтобы видеть заряд по Bluetooth.',true);showHowto(true)}} helperUrl=null; return }
+  helperLive=true;$('dHelper').textContent='работает';
+  if(j.firmware&&j.firmware!==btFw){btFw=j.firmware;renderFw()}
+  checkFirmware();
+  if(hidOk)return;
+  if(!j.found){$('dHelper').textContent='работает, G435 не найден';setConn(dev?'usb':'none');note('Помощник работает, но <b>G435 нет среди Bluetooth-устройств</b> этого компьютера. Подключи наушники по Bluetooth в настройках системы.',true);showHowto(true);return}
+  if(!j.connected){setConn('none',j.name);note('G435 есть в списке Bluetooth, но <b>сейчас не подключены</b>. Включи наушники в режиме Bluetooth.',true);showHowto(false);return}
+  setConn('bt',j.name);
+  if(j.percent==null){note('Наушники подключены по Bluetooth, но система пока не получила от них процент. Подожди минуту или переподключи Bluetooth.',true);showHowto(false);return}
+  // Bluetooth reports only the level, so charging is inferred from the level going up
+  if(btPrev!=null){if(j.percent>btPrev)btChg=true;else if(j.percent<btPrev)btChg=false}
+  btPrev=j.percent;
+  if(demo){demo=false;demoChg=false;$('btnDemoChg').hidden=true}
+  setGauge(j.percent,{chg:btChg,full:btChg&&j.percent>=100,mode:'on',src:j.source||'Bluetooth'});
+  $('dProto').textContent='Bluetooth · помощник';
+  showHowto(false);
+  note(btChg?'Наушники <b>заряжаются</b>: процент растёт. Обновляется каждые 15 секунд.':'Заряд приходит по Bluetooth через помощник. Обновляется каждые 15 секунд.');
+}
+if(!IS_MOBILE)setTimeout(()=>helperOnce(),1200);
+
+/* ---- Firmware updates (official Logitech source) ---- */
+const FW_PAGE='https://support.logi.com/hc/en-ca/articles/33655346235543-Logitech-G435-LIGHTSPEED-Wireless-Gaming-Headset-Update-Tool';
+let fw={latest:'3.1.1.14',date:'2025-07-23',url:'https://download01.logi.com/web/ftp/pub/techsupport/gaming/G435Update_3.1.1.14.exe',size:'13,2 МБ',live:false};
+let btFw=null,helperPlatform=null,fwCheckedAt=0;
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return null}}
+function cmpVer(a,b){a=String(a).split('.').map(Number);b=String(b).split('.').map(Number);for(let i=0;i<Math.max(a.length,b.length);i++){const d=(a[i]||0)-(b[i]||0);if(d)return Math.sign(d)}return 0}
+const fmtDate=s=>{try{return new Date(s+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}catch(e){return s}};
+const installedFw=()=>btFw||ls('g435.fw');
+const needUpdate=()=>{const i=installedFw();return !i||cmpVer(fw.latest,i)>0};
+function renderFw(){
+  const i=installedFw();
+  $('fwInst').textContent=i?(i+(btFw?'':' · отмечено вручную')):'неизвестна';
+  $('fwLatest').textContent=fw.latest+(fw.date?' · '+fmtDate(fw.date):'');
+  $('fwSrc').textContent=fw.live?'logi.com · '+new Date(fwCheckedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'встроенные данные';
+  $('fwStatus').innerHTML=!i?'Доступна '+fw.latest+' <span class="fw-badge">1</span>':needUpdate()?'Доступно обновление <span class="fw-badge">1</span>':'<span class="fw-ok">ПО обновлено</span>';
+}
+async function checkFirmware(){
+  if(!helperUrl||Date.now()-fwCheckedAt<6*3600e3)return;
+  try{const r=await fetch(helperUrl.replace('/battery','/firmware'),{cache:'no-store',signal:AbortSignal.timeout(30000)});const j=await r.json();
+    if(j.platform)helperPlatform=j.platform;
+    if(j.latest){fw={...fw,latest:j.latest,date:j.date||fw.date,url:j.url||fw.url,live:true};fwCheckedAt=Date.now();renderFw();maybePrompt()}
+  }catch(e){}
+}
+function closeSheet(){$('sheetBg').hidden=true}
+function sheet(meta,body,btns){
+  $('sheetMeta').innerHTML=meta;$('sheetBody').innerHTML=body;const b=$('sheetBtns');b.innerHTML='';
+  btns.forEach(([t,cls,fn])=>{const x=document.createElement('button');x.className='b '+cls;x.textContent=t;x.onclick=fn;b.appendChild(x)});
+  $('sheetBg').hidden=false;b.firstChild&&b.firstChild.focus();
+}
+$('sheetBg').addEventListener('click',e=>{if(e.target===$('sheetBg'))closeSheet()});
+addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
+const META=()=>`G435 · прошивка ${fw.latest}<br>Logitech · ${fw.size} · ${fmtDate(fw.date)}`;
+function openUpdate(){
+  const i=installedFw();
+  if(i&&!needUpdate()){sheet(`G435 · прошивка ${i}`,'<p>У тебя последняя официальная прошивка. Лаунчер проверяет сайт Logitech раз в 6 часов и сам предложит обновиться, когда выйдет новая версия.</p>',[['Готово','primary',closeSheet]]);return}
+  sheet(META(),`<p>Официальное обновление от Logitech: исправления ошибок и улучшения работы гарнитуры. Утилита Logitech сама проверит наушники и поставит прошивку, только если она нужна.</p>${i?'':'<p style="color:var(--muted);font-size:13px">Версию в наушниках браузер прочитать не может, поэтому лаунчер предлагает официальную утилиту: она сама сравнит версии.</p>'}`,
+    [['Обновить','primary',startUpdate],['Позже','',()=>{ls('g435.snooze',String(Date.now()+3*864e5));closeSheet()}],['Уже обновлено','ghost',()=>{ls('g435.fw',fw.latest);renderFw();closeSheet()}]]);
+}
+function maybePrompt(){
+  if(IS_MOBILE||!needUpdate())return;
+  if(Date.now()<(+ls('g435.snooze')||0))return;
+  if(!$('sheetBg').hidden)return;
+  openUpdate();
+}
+function steps(list){return '<div class="steps">'+list.map(([s,t])=>`<div class="step ${s}"><i></i><span>${t}</span></div>`).join('')+'</div>'}
+async function startUpdate(){
+  const winHelper=helperUrl&&helperPlatform==='win';
+  if(!winHelper){
+    if(IS_WIN){sheet(META(),'<p>Чтобы лаунчер сам скачал и открыл официальную утилиту, запусти помощник: открой PowerShell и вставь команду из блока «Как видеть заряд». Потом снова нажми «Обновить».</p>',[['Понятно','primary',()=>{closeSheet();showHowto(true)}]]);return}
+    sheet(META(),`<p>Logitech выпускает утилиту обновления G435 <b>только для Windows</b>. На Mac прошивку поставить нельзя: Logitech не даёт для этого инструмента.</p><p>Подключи наушники кабелем USB-C к компьютеру с Windows, вставь туда же приёмник, открой там этот лаунчер и нажми «Обновить». Остальное лаунчер сделает сам.</p><p><a href="${FW_PAGE}" target="_blank" rel="noopener">Страница обновления на сайте Logitech</a></p>`,[['Понятно','primary',closeSheet]]);return}
+  const S=[['run','Скачиваю утилиту с download01.logi.com'],['','Проверяю цифровую подпись Logitech'],['','Открываю утилиту обновления']];
+  sheet(META(),'<p>Подключи наушники кабелем USB-C и вставь приёмник. Звук на время обновления пропадёт.</p>'+steps(S),[]);
+  try{
+    const r=await fetch(helperUrl.replace('/battery','/update'),{method:'POST',signal:AbortSignal.timeout(320000)});const j=await r.json();
+    if(!j.ok)throw new Error(j.error||'fail');
+    $('sheetBody').innerHTML='<p>Утилита Logitech открыта. Нажми в ней <b>Update</b> и не отключай наушники, пока она не закончит. Когда закончит, нажми «Готово».</p>'+steps(S.map(([,t])=>['done',t]));
+    const b=$('sheetBtns');b.innerHTML='';[['Готово, обновлено','primary',()=>{ls('g435.fw',fw.latest);ls('g435.snooze',null);renderFw();closeSheet();note('Прошивка обновлена до '+fw.latest+'. Лаунчер переподключится к наушникам сам.');setTimeout(()=>showCharge(true),500)}],['Закрыть','',closeSheet]].forEach(([t,c,f])=>{const x=document.createElement('button');x.className='b '+c;x.textContent=t;x.onclick=f;b.appendChild(x)});
   }catch(e){
-    hidOk=false;
-    note('Приёмник на месте, но <b>наушники не отвечают</b>. Проверь, что они включены и рядом. Если открыт Logitech G HUB, закрой его и нажми «Обновить заряд».',true);
-    $('state').className='state';$('stateTxt').textContent='нет ответа';
-    setConn('none','приёмник есть, наушники молчат');
+    const why={'bad-signature':'Файл не подписан Logitech, поэтому я его удалил и не запустил.','download-failed':'Не получилось скачать файл с сайта Logitech. Проверь интернет.','no-official-url':'На странице Logitech не нашлась ссылка на утилиту.'}[e.message]||'Помощник не ответил. Проверь, что окно помощника открыто.';
+    $('sheetBody').innerHTML='<p>'+why+'</p>'+steps([['fail','Обновление не запущено']]);
+    const b=$('sheetBtns');b.innerHTML='';[['Попробовать снова','primary',startUpdate],['Закрыть','',closeSheet]].forEach(([t,c,f])=>{const x=document.createElement('button');x.className='b '+c;x.textContent=t;x.onclick=f;b.appendChild(x)});
   }
 }
-async function openDevice(d){
-  dev=d;
-  try{ if(!dev.opened)await dev.open() }catch(e){note('Не удалось открыть устройство. Закрой Logitech G HUB и попробуй ещё раз.',true);return}
-  dev.addEventListener('inputreport',onReport);
-  demo=false;demoChg=false;$('btnDemoChg').hidden=true;
-  $('btnRefresh').disabled=false; $('btnConnect').textContent='Переподключить';
-  setConn('usb',dev.productName);
-  try{
-    if(!(await detect())){note('Устройство подключено, но <b>не сообщает заряд</b> по известным протоколам HID++. Вероятно, эта прошивка отдаёт заряд только в G HUB.',true);return}
-  }catch(e){note('Приёмник найден, но <b>наушники выключены</b> или вне зоны. Включи их и нажми «Обновить заряд».',true);setConn('none','приёмник есть, наушники выключены');return}
-  $('dProto').textContent=method.name;
-  poll=null;await readBattery();if(!poll)setPoll(charging);
-}
-const pick=list=>list.find(d=>d.collections.some(c=>(c.outputReports||[]).some(r=>r.reportId===LONG)))||list[0];
-async function connect(){
-  if(!('hid' in navigator)){note('Этот браузер не умеет работать с USB-устройствами. Открой лаунчер в <b>Chrome или Edge</b> на компьютере.',true);return}
-  let list;
-  try{list=await navigator.hid.requestDevice({filters:[{vendorId:0x046d}]})}
-  catch(e){note('Здесь браузер не даёт доступ к USB. Запусти лаунчер ярлыком из папки G435 Launcher: на Mac «Открыть G435 Launcher», на Windows «G435 Launcher (Windows)». Там подключение заработает.',true);return}
-  if(!list.length){note('Устройство не выбрано. Нажми «Подключить» и выбери в списке приёмник G435.');return}
-  await openDevice(pick(list));
-  refreshConn(false);
-}
-$('btnConnect').onclick=connect;
-$('btnRefresh').onclick=async()=>{ if(!method){try{await detect()}catch(e){}} readBattery() };
-$('btnConn').onclick=()=>refreshConn(true);
-$('btnDemoChg').onclick=()=>{demoChg=!demoChg;$('btnDemoChg').textContent=demoChg?'Отключить зарядку (демо)':'Показать зарядку (демо)';setGauge(level,{chg:demoChg,mode:'demo'})};
-if('hid' in navigator){
-  navigator.hid.addEventListener('disconnect',e=>{if(e.device===dev){clearInterval(poll);poll=null;method=null;dev=null;hidOk=false;charging=false;$('gauge').classList.remove('charging');$('state').className='state';$('stateTxt').textContent='отключены';$('btnRefresh').disabled=true;setConn('none');note('Приёмник отключён. Вставь его обратно, лаунчер подхватит его сам.',true)}});
-  navigator.hid.addEventListener('connect',e=>{if(!dev&&e.device.vendorId===0x046d)setTimeout(()=>openDevice(e.device),600)});
-  // reconnect automatically to a receiver that was allowed before
-  navigator.hid.getDevices().then(l=>{l=l.filter(d=>d.vendorId===0x046d);if(l.length)openDevice(pick(l))}).catch(()=>{});
-}
-if(navigator.mediaDevices){navigator.mediaDevices.addEventListener&&navigator.mediaDevices.addEventListener('devicechange',()=>refreshConn(false))}
-if(navigator.permissions&&navigator.permissions.query){navigator.permissions.query({name:'microphone'}).then(s=>{if(s.state==='granted')refreshConn(false)}).catch(()=>{})}
+$('btnFw').onclick=openUpdate;
+renderFw();
+if(!IS_MOBILE)setTimeout(maybePrompt,2500);
 
 /* phone: no USB access in mobile browsers, so show the model + demo and point to the computer */
 if(IS_MOBILE){
@@ -401,27 +624,35 @@ const CW=[
 let cw=CW[0];
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* ============ Cursor trail: sound-wave rings ============ */
+/* ============ Cursor trail: letter G (always on, works with mouse, pen and touch) ============ */
 (function(){
   const c=$('trail'),x=c.getContext('2d');let W,H,D;const P=[];let lx=null,ly=null,flip=0;
-  function rs(){D=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;c.width=W*D;c.height=H*D}
+  function rs(){D=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;c.width=Math.round(W*D);c.height=Math.round(H*D)}
   addEventListener('resize',rs);rs();
-  addEventListener('pointermove',e=>{
-    if(reduce)return;
-    if(lx!==null&&Math.hypot(e.clientX-lx,e.clientY-ly)<14)return;
-    const ang=lx===null?0:Math.atan2(e.clientY-ly,e.clientX-lx);
-    lx=e.clientX;ly=e.clientY;flip^=1;
-    P.push({x:lx,y:ly,a:ang,t:0,col:flip?cw.fabric:cw.coil,k:flip});
-    if(P.length>60)P.shift();
-  });
+  const FONT=getComputedStyle(document.documentElement).getPropertyValue('--f-display').trim()||'"Arial Black",sans-serif';
+  function add(cx,cy){
+    if(lx!==null&&Math.hypot(cx-lx,cy-ly)<(reduce?28:16))return;
+    const ang=lx===null?0:Math.atan2(cy-ly,cx-lx);
+    lx=cx;ly=cy;flip^=1;
+    P.push({x:cx,y:cy,a:ang,t:0,col:flip?cw.fabric:cw.coil,s:13+Math.random()*7,spin:(Math.random()-.5)*1.2});
+    if(P.length>70)P.shift();
+  }
+  addEventListener('pointermove',e=>add(e.clientX,e.clientY),{passive:true});
+  addEventListener('mousemove',e=>{if(!window.PointerEvent)add(e.clientX,e.clientY)},{passive:true});
+  addEventListener('pointerleave',()=>{lx=ly=null});
   let last=performance.now();
-  (function loop(now){const dt=(now-last)/1000;last=now;
+  (function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     x.setTransform(D,0,0,D,0,0);x.clearRect(0,0,W,H);
-    for(let i=P.length-1;i>=0;i--){const p=P[i];p.t+=dt;const life=p.t/0.7;if(life>=1){P.splice(i,1);continue}
-      x.globalAlpha=(1-life)*0.85;x.strokeStyle=p.col;x.fillStyle=p.col;x.lineCap='round';
-      if(p.k){ // three arcs like a sound wave, facing backwards along the path
-        for(let j=0;j<3;j++){const r=4+j*5+life*10;x.lineWidth=2.2-j*.5;x.beginPath();x.arc(p.x,p.y,r,p.a+Math.PI-0.7,p.a+Math.PI+0.7);x.stroke()}
-      }else{x.beginPath();x.arc(p.x,p.y,3.5*(1-life)+1,0,Math.PI*2);x.fill()}
+    x.textAlign='center';x.textBaseline='middle';
+    for(let i=P.length-1;i>=0;i--){const p=P[i];p.t+=dt;const life=p.t/(reduce?.45:.8);if(life>=1){P.splice(i,1);continue}
+      const k=1-life;
+      x.save();x.translate(p.x,p.y-(reduce?0:life*10));x.rotate(p.a*0.15+p.spin*life);
+      const sz=p.s*(0.7+0.5*Math.sin(Math.min(1,life*2.2)*Math.PI/2));
+      x.font=`700 ${sz.toFixed(1)}px ${FONT}`;
+      x.globalAlpha=k*0.9;
+      x.lineWidth=3;x.strokeStyle='rgba(255,255,255,.85)';x.strokeText('G',0,0);
+      x.fillStyle=p.col;x.fillText('G',0,0);
+      x.restore();
     }
     x.globalAlpha=1;requestAnimationFrame(loop)})(last);
 })();
