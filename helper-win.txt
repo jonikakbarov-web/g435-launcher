@@ -19,6 +19,32 @@ function Get-G435 {
   return $res
 }
 
+# Every Bluetooth device with a battery that Windows knows about
+$script:devs = $null; $script:devsAt = [datetime]::MinValue
+function Get-Kind($n) {
+  $n = "$n".ToLower()
+  if ($n -match 'mouse|mx master|mx anywhere') { return 'mouse' }
+  if ($n -match 'keyboard|keys') { return 'keyboard' }
+  if ($n -match 'controller|xbox|dualsense|gamepad') { return 'gamepad' }
+  if ($n -match 'head|buds|airpods|g435|ear|beats|jbl|sony wh|sony wf') { return 'headset' }
+  return 'device'
+}
+function Get-Devices {
+  if ($script:devs -and ((Get-Date) - $script:devsAt).TotalSeconds -lt 5) { return $script:devs }
+  $list = New-Object System.Collections.ArrayList
+  $seen = @{}
+  foreach ($d in @(Get-PnpDevice -Class Bluetooth -PresentOnly)) {
+    $p = Get-PnpDeviceProperty -InstanceId $d.InstanceId -KeyName $BatteryKey
+    if (-not $p -or $null -eq $p.Data) { continue }
+    $name = $d.FriendlyName
+    if ($seen.ContainsKey($name)) { continue }; $seen[$name] = 1
+    [void]$list.Add([ordered]@{ name = $name; percent = [int]$p.Data; connected = ($d.Status -eq 'OK'); kind = (Get-Kind $name); source = 'Windows Bluetooth' })
+  }
+  $script:devs = [ordered]@{ ok = $true; platform = 'win'; devices = @($list) }
+  $script:devsAt = Get-Date
+  return $script:devs
+}
+
 # Latest official firmware, read from Logitech's own support page (cached for 6 hours)
 $FwPage = 'https://support.logi.com/hc/en-ca/articles/33655346235543-Logitech-G435-LIGHTSPEED-Wireless-Gaming-Headset-Update-Tool'
 $AllowedOrigins = @('https://jonikakbarov-web.github.io', 'null')
@@ -78,8 +104,9 @@ while ($listener.IsListening) {
     else { $data = Start-Update }
   }
   elseif ($path -eq '/firmware') { $data = Get-Firmware }
+  elseif ($path -eq '/devices') { $data = Get-Devices }
   else { $data = Get-G435 }
-  $bytes = [Text.Encoding]::UTF8.GetBytes(($data | ConvertTo-Json -Compress))
+  $bytes = [Text.Encoding]::UTF8.GetBytes(($data | ConvertTo-Json -Compress -Depth 5))
   $r.ContentType = 'application/json; charset=utf-8'
   $r.OutputStream.Write($bytes, 0, $bytes.Length); $r.Close()
 }
